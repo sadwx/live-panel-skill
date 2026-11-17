@@ -1,0 +1,353 @@
+<title>Photo Upload Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one terminal window, fixed 1120px stage scaled to fit; nodes on an absolute grid, wires in an SVG layer under them, log strip below. */
+:root{
+  --bg:#f3f4f7; --win:#fbfbfd; --chrome:#e9eaf0; --line:#cfd2dc; --fg:#2a2d38; --dim:#7a7f90; --mute:#a3a8b8;
+  --mint:#1f9d78; --lav:#5a66d6; --green:#3f9a2f; --pink:#c0469c; --amber:#b9780a;
+  --mint-bg:rgba(31,157,120,.10); --lav-bg:rgba(90,102,214,.10); --green-bg:rgba(63,154,47,.10); --pink-bg:rgba(192,70,156,.10);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1015; --win:#16171d; --chrome:#1d1e26; --line:#33353f; --fg:#d7d9e1; --dim:#8b8f9e; --mute:#5c6070;
+  --mint:#8ef0c4; --lav:#a7b4ff; --green:#9fe88a; --pink:#f2a6d8; --amber:#f0c674;
+  --mint-bg:rgba(142,240,196,.09); --lav-bg:rgba(167,180,255,.09); --green-bg:rgba(159,232,138,.09); --pink-bg:rgba(242,166,216,.09);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1015; --win:#16171d; --chrome:#1d1e26; --line:#33353f; --fg:#d7d9e1; --dim:#8b8f9e; --mute:#5c6070;
+  --mint:#8ef0c4; --lav:#a7b4ff; --green:#9fe88a; --pink:#f2a6d8; --amber:#f0c674;
+  --mint-bg:rgba(142,240,196,.09); --lav-bg:rgba(167,180,255,.09); --green-bg:rgba(159,232,138,.09); --pink-bg:rgba(242,166,216,.09);
+  color-scheme:dark}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;line-height:1.45;padding:16px;box-sizing:border-box;overflow-x:hidden}
+.viewport{width:100%;max-width:1120px;margin:0 auto;position:relative}
+.stage{width:1120px;transform-origin:0 0;position:relative}
+.win{background:var(--win);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+.chrome{height:30px;background:var(--chrome);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;padding:0 12px;position:relative}
+.chrome i{width:11px;height:11px;border-radius:50%;background:var(--mute);display:block}
+.chrome i:nth-child(1){background:#ec6a5e}.chrome i:nth-child(2){background:#f4bf4f}.chrome i:nth-child(3){background:#61c554}
+.chrome span{position:absolute;left:0;right:0;text-align:center;color:var(--dim);font-size:11px;letter-spacing:.02em}
+.head{display:flex;justify-content:center;gap:14px;padding:16px 0 10px;font-weight:700;letter-spacing:.08em;font-size:12px;text-transform:uppercase}
+.head .dot{color:var(--mute)}
+.legend{display:flex;justify-content:center;gap:22px;color:var(--dim);font-size:11.5px;padding-bottom:10px;border-bottom:1px solid var(--line);margin:0 24px}
+.legend b{display:inline-block;width:8px;height:8px;margin-right:7px;vertical-align:1px}
+.board{position:relative}
+.board svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.wire{fill:none;stroke:var(--line);stroke-width:1.2}
+.wire.lit{stroke-dasharray:3 4}
+.jx{fill:var(--fg)}
+.pkt{filter:drop-shadow(0 0 3px currentColor)}
+.node{position:absolute;border:1.5px solid;border-radius:3px;padding:8px 12px;box-sizing:border-box;background:var(--win);font-size:12px;white-space:nowrap}
+.node .h{font-weight:700;letter-spacing:.02em}
+.node .s{color:var(--dim);margin-top:1px}
+.node .r{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin-top:6px}
+.node .r em{font-style:normal;color:var(--dim)}
+.node .r strong{font-weight:500}
+.node .g{display:grid;grid-template-columns:auto 86px auto;align-items:center;gap:3px 10px;margin-top:6px}
+.node .g em{font-style:normal;color:var(--dim)}
+.bar{height:9px;border:1px solid var(--line);background:var(--chrome);position:relative;overflow:hidden}
+.bar b{position:absolute;inset:0;width:0;transition:width .8s ease}
+.bar b::after{content:"";position:absolute;inset:0;left:auto;width:35%;background:repeating-linear-gradient(90deg,transparent 0 2px,var(--win) 2px 3px);opacity:.6}
+.st{margin-top:7px;font-weight:500}
+.st::before{content:"◐";display:inline-block;margin-right:6px;animation:spin 1.6s linear infinite}
+.st.done::before{content:"✓ ";animation:none}
+.st.idle::before{content:"○ ";animation:none;color:var(--mute)}
+.st.wait::before{content:"◔ ";animation:spin 3s linear infinite}
+.tiny{color:var(--dim);font-size:11px;text-align:center;margin-top:5px}
+.side{position:absolute;border:1.5px solid;border-radius:3px;padding:10px 12px;box-sizing:border-box;background:var(--win);font-size:12px;white-space:nowrap}
+.side .h{font-weight:700;text-align:center}
+.side .s{color:var(--dim);text-align:center}
+.trg{margin:8px -12px 0;padding:2px 12px;color:var(--dim);transition:background .3s,color .3s}
+.trg::before{content:"◇ ";color:var(--mute)}
+.trg.on{color:var(--fg);font-weight:700;background:var(--lav-bg)}
+.trg.on::before{content:"◆ "}
+.note{color:var(--dim);white-space:pre-line;margin-top:10px;line-height:1.5}
+.stat{display:flex;justify-content:space-between;gap:10px;margin-top:3px}
+.stat em{font-style:normal;color:var(--dim)}
+.stat strong{font-weight:700;font-variant-numeric:tabular-nums}
+.stat.pulse strong{animation:flash .5s}
+.klabel{position:absolute;color:var(--dim);font-size:11.5px;transform:translateY(-50%)}
+.hub{position:absolute;transform:translate(-50%,-50%);font-size:11.5px;color:var(--dim);background:var(--win);padding:0 8px;white-space:nowrap}
+.logwrap{margin:4px 24px 20px;border-top:1px solid var(--line);padding-top:10px}
+.logh{color:var(--dim);font-size:11px;margin-bottom:5px}
+.log{font-size:11.5px;line-height:1.6;height:calc(var(--lines,6) * 1.6em);overflow:hidden;color:var(--fg)}
+.log div{display:grid;grid-template-columns:70px 76px 1fr;gap:0 12px;animation:up .35s ease-out}
+.log div .t{color:var(--mute);font-variant-numeric:tabular-nums}.log div .w{font-weight:700}
+.c-mint{color:var(--mint)}.c-lav{color:var(--lav)}.c-green{color:var(--green)}.c-pink{color:var(--pink)}.c-amber{color:var(--amber)}
+.b-mint{border-color:var(--mint)}.b-lav{border-color:var(--lav)}.b-green{border-color:var(--green)}.b-pink{border-color:var(--pink)}.b-amber{border-color:var(--amber)}
+.bg-mint{background:var(--mint)}.bg-lav{background:var(--lav)}.bg-green{background:var(--green)}.bg-pink{background:var(--pink)}.bg-amber{background:var(--amber)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flash{0%{color:var(--amber)}100%{color:inherit}}
+@keyframes up{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+/* flow mode: one route plays at a time; nodes off the route dim, the active node glows */
+:root{--amber-bg:color-mix(in srgb,var(--amber) 10%,transparent)}
+.node,.hub,.elabel{transition:opacity .45s,background .45s,box-shadow .45s}
+.dim{opacity:.32}
+.node.on{background:var(--onbg);box-shadow:0 0 0 1.5px var(--onc),0 0 26px var(--onbg),0 0 10px var(--onbg)}
+.b-mint{--onbg:var(--mint-bg);--onc:var(--mint)}.b-lav{--onbg:var(--lav-bg);--onc:var(--lav)}.b-green{--onbg:var(--green-bg);--onc:var(--green)}.b-pink{--onbg:var(--pink-bg);--onc:var(--pink)}.b-amber{--onbg:var(--amber-bg);--onc:var(--amber)}
+.wire{transition:stroke .3s,opacity .3s}
+.wire.route{stroke:var(--dim);stroke-width:1.5}
+.wire.hot{stroke:currentColor;stroke-width:2}
+.wire.off{opacity:.35}
+.wire.dash{stroke-dasharray:5 5}
+.elabel{position:absolute;transform:translate(-50%,-50%);font-size:10.5px;color:var(--dim);background:var(--win);padding:0 5px;white-space:nowrap}
+.flowbar{text-align:center;color:var(--dim);font-size:11.5px;padding:8px 0 0;min-height:18px}
+.flowbar b{color:var(--fg)}
+.flowbar .err{color:#e5484d;font-weight:700}
+.flowtabs{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 6px;padding:10px 24px 0;font-size:11px}
+.flowtabs:empty{display:none}
+.flowtabs button{font:inherit;color:var(--dim);background:none;border:1px solid var(--line);border-radius:3px;padding:2px 9px;cursor:pointer}
+.flowtabs button:hover{color:var(--fg);border-color:var(--dim)}
+.flowtabs button.on{color:var(--fg);border-color:var(--fg);font-weight:700}
+.ctl{margin-left:auto;position:relative;display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim)}
+.ctl em{font-style:normal;margin:0 2px 0 8px}
+.ctl button{font:inherit;color:var(--dim);background:none;border:1px solid var(--line);border-radius:3px;padding:0 6px;line-height:16px;cursor:pointer}
+.ctl button:hover{color:var(--fg);border-color:var(--dim)}
+.ctl button.on{color:var(--fg);border-color:var(--fg);font-weight:700}
+.paused .st::before,.paused .log div,.paused .stat strong{animation-play-state:paused}
+@media (prefers-reduced-motion:reduce){.st::before,.pkt{animation:none!important}.log div{animation:none}}
+</style>
+
+<div class="viewport"><div class="stage" id="stage"><div class="win">
+  <div class="chrome"><i></i><i></i><i></i><span id="wtitle"></span><div class="ctl" id="ctl"></div></div>
+  <div class="head" id="head"></div>
+  <div class="legend" id="legend"></div>
+  <div class="flowtabs" id="flowtabs"></div>
+  <div class="flowbar" id="flowbar"></div>
+  <div class="board" id="board"><svg id="wires"></svg></div>
+  <div class="logwrap"><div class="logh" id="logh"></div><div class="log" id="log"></div></div>
+</div></div></div>
+
+<script>
+// ───────────── SPEC: edit this block to describe any system ─────────────
+const SPEC = {
+  window: "~/photo-upload — zsh — 128×44",
+  title: "PHOTO UPLOAD",
+  tags: [["HAPPY PATH","mint"],["SIGN · PUT · VERIFY · THUMBNAIL","green"]],
+  legend: [["mint","mobile app"],["green","upload api"],["lav","object storage"],["pink","thumbnailer"]],
+  boardHeight: 320,
+  nodes: [
+    {id:"app", x:40,y:30,w:230,h:150, c:"mint", head:"MOBILE APP", sub:"iOS · Android",
+     rows:[["calls","POST /uploads"],["sends","PUT to signed URL"],["gets","push upload.ready"]]},
+    {id:"api", x:310,y:30,w:230,h:150, c:"green", head:"UPLOAD API", sub:"auth · metadata db",
+     rows:[["signs","PUT URLs · 15 min"],["checks","size · ETag"],["records","upload status"]]},
+    {id:"store", x:580,y:30,w:230,h:150, c:"lav", head:"OBJECT STORAGE", sub:"private bucket",
+     rows:[["holds","originals, thumbs"],["emits","ObjectCreated"],["serves","signed GETs"]]},
+    {id:"thumb", x:850,y:30,w:230,h:150, c:"pink", head:"THUMBNAILER", sub:"event consumer",
+     rows:[["reads","the original"],["writes","256 · 1024 px"],["reports","thumbnails ready"]]},
+    {hub:true, x:560,y:296, text:"the API never touches the bytes: the app PUTs <b class='c-mint'>straight to storage</b>"},
+  ],
+  edges: [
+    {from:"app",to:"api",c:"mint"},
+    {from:"api",to:"store",c:"green"},
+    {from:"store",to:"thumb",c:"lav"},
+    {from:"app",to:"store",c:"mint",via:"below",lane:40,dx1:40,dx2:-40},
+    {from:"api",to:"thumb",c:"pink",via:"below",lane:76,dx1:40,dx2:0},
+  ],
+  flows: [
+    {name:"happy path", steps:[
+      "app>api","api>app","app>store","store>app","app>api","api>store","store>api",
+      "api>api","store>thumb","thumb>store","thumb>thumb","thumb>store","thumb>api","api>app"],
+     log:[
+      ["app","mint","POST /uploads · image/jpeg · 4.2 MB"],
+      ["api","green","201 · upload_id, signed PUT URL · 15 min"],
+      ["app","mint","PUT object · direct to the bucket"],
+      ["storage","lav","200 · ETag"],
+      ["app","mint","POST /uploads/{id}/complete · ETag"],
+      ["api","green","HEAD object · size and ETag"],
+      ["storage","lav","200 · 4.2 MB · ETag matches"],
+      ["api","green","status received · original is final"],
+      ["storage","lav","ObjectCreated · originals/{id}.jpg"],
+      ["thumb","pink","GET original · 4.2 MB"],
+      ["thumb","pink","resize · 256 px, 1024 px · strip EXIF"],
+      ["thumb","pink","PUT thumbs/{id}/256.jpg, 1024.jpg"],
+      ["thumb","pink","POST /internal/thumbnails-ready"],
+      ["api","green","push upload.ready · status ready"],
+    ]},
+  ],
+  counters:{},
+  logTitle:"upload log", logLines:7, tick:1300, pace:1.5,
+};
+// ───────────────────────────── renderer ─────────────────────────────
+const $=(s,p=document)=>p.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const board=$("#board"), svg=$("#wires"), NS="http://www.w3.org/2000/svg";
+const S=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+const esc=s=>String(s).replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+const ERR=window.__panelErrors=[]; const err=m=>{ERR.push(m);console.warn("[panel]",m)};
+
+$("#wtitle").textContent=SPEC.window;
+$("#head").innerHTML=`<span>${esc(SPEC.title)}</span>`+SPEC.tags.map(([t,c])=>`<span class="dot">·</span><span class="c-${c}">${esc(t)}</span>`).join("");
+$("#legend").innerHTML=SPEC.legend.map(([c,t])=>`<span><b class="bg-${c}"></b>${esc(t)}</span>`).join("");
+$("#logh").textContent="── "+(SPEC.logTitle||"log")+" ──";$("#log").style.setProperty("--lines",SPEC.logLines||6);
+board.style.height=SPEC.boardHeight+"px";
+
+const N={}, NEL={};
+for(const n of SPEC.nodes){
+  if(n.hub){const h=el("div","hub",n.text);h.style.left=n.x+"px";h.style.top=n.y+"px";board.appendChild(h);continue;}
+  N[n.id]=n;
+  const d=el("div",`node b-${n.c}`);d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${n.w}px;min-height:${n.h}px;${n.center?"text-align:center":""}`;
+  let h=`<div class="h c-${n.c}">${esc(n.head)}${n.headRight?`<span style="float:right;font-weight:400;color:var(--dim)">${esc(n.headRight[0])} <strong data-counter="${n.headRight[1]}" style="color:var(--fg)">—</strong></span>`:""}</div>`;
+  if(n.sub)h+=`<div class="s">${esc(n.sub)}</div>`;
+  if(n.rows)h+=`<div class="r">${n.rows.map(([k,v])=>`<em>${esc(k)}</em><strong>${esc(v)}</strong>`).join("")}</div>`;
+  if(n.gauges)h+=`<div class="g">${n.gauges.map(([k,v,t],i)=>`<em>${esc(k)}</em><span class="bar"><b class="bg-${n.c}" data-g="${n.id}:${i}"></b></span><span><strong data-gv="${n.id}:${i}">${v.toFixed(2)}</strong> <span class="c-${n.c}">${esc(t)}</span></span>`).join("")}</div>`;
+  if(n.foot)h+=`<div class="tiny" style="text-align:${n.center?"center":"left"}">${esc(n.foot)}</div>`;
+  if(n.status)h+=`<div class="st ${n.status.kind} c-${n.c}" data-st="${n.id}">${esc(n.status.text)}</div>`;
+  d.innerHTML=h;d.dataset.id=n.id;board.appendChild(d);NEL[n.id]=d;
+}
+const sd=SPEC.side||{blocks:[]}; const side=el("div",`side b-${sd.c||"lav"}`);
+if(SPEC.side){
+  side.style.cssText=`left:${sd.x}px;top:${sd.y}px;width:${sd.w}px;height:${sd.h}px`;
+  let ti=0;
+  side.innerHTML=`<div class="h c-${sd.c}">${esc(sd.head)}</div><div class="s">${esc(sd.sub||"")}</div>`+sd.blocks.map(b=>
+    b.trigger?`<div class="trg" data-trg="${ti++}">${esc(b.trigger[0])}</div>`:
+    b.note!=null?`<div class="note">${esc(b.note)}</div>`:
+    b.value?`<div class="note" style="margin-top:0"><b class="c-${sd.c}" data-counter="${b.value}">—</b></div>`:
+    b.stat?`<div class="stat"><em>${esc(b.stat[0])}</em><strong data-counter="${b.stat[1]}">0</strong></div>`:
+    b.gap?`<div style="height:${b.gap}px"></div>`:"").join("");
+  board.appendChild(side);
+}
+
+// ── wires ──
+// Routing by relative position: target below → bottom-centre to top-centre; target above → top to bottom;
+// same row → side to side. via:"below"|"above" routes under/over both boxes at `lane` px (sequence lifelines);
+// via:"right"|"left" goes round the side (loop-backs). dx1/dx2 shift the anchors off-centre so wires don't share a stem.
+const box=id=>{const e=NEL[id];if(!e){err(`edge or step names unknown node "${id}"`);return {x:0,y:0,w:0,h:0}}return {x:e.offsetLeft,y:e.offsetTop,w:e.offsetWidth,h:e.offsetHeight}};
+function route(e){
+  const a=box(e.from),b=box(e.to), ax=a.x+a.w/2+(e.dx1||0), bx=b.x+b.w/2+(e.dx2||0), L=e.lane||24;
+  if(e.via==="below"||e.via==="above"){const dn=e.via==="below",y1=dn?a.y+a.h:a.y,y2=dn?b.y+b.h:b.y,yl=dn?Math.max(y1,y2)+L:Math.min(y1,y2)-L;return {d:`M${ax} ${y1} V${yl} H${bx} V${y2}`,bends:[]};}
+  if(e.via==="right"||e.via==="left"){const r=e.via==="right",xa=r?a.x+a.w:a.x,xb=r?b.x+b.w:b.x,ya=a.y+a.h/2+(e.dy1||0),yb=b.y+b.h/2+(e.dy2||0),xo=r?Math.max(xa,xb)+L:Math.min(xa,xb)-L;return {d:`M${xa} ${ya} H${xo} V${yb} H${xb}`,bends:[]};}
+  const down=b.y>=a.y+a.h-1,up=a.y>=b.y+b.h-1;
+  if(down||up){const y1=down?a.y+a.h:a.y,y2=down?b.y:b.y+b.h,my=e.my??(y1+y2)/2;return Math.abs(ax-bx)<1?{d:`M${ax} ${y1} V${y2}`,bends:[]}:{d:`M${ax} ${y1} V${my} H${bx} V${y2}`,bends:[[ax,my],[bx,my]]};}
+  const ay=a.y+a.h/2+(e.dy1||0),by=b.y+b.h/2+(e.dy2||0),right=b.x>=a.x+a.w,x1=right?a.x+a.w:a.x,x2=right?b.x:b.x+b.w,mx=e.mx??(x1+x2)/2;
+  return Math.abs(ay-by)<1?{d:`M${x1} ${ay} H${x2}`,bends:[]}:{d:`M${x1} ${ay} H${mx} V${by} H${x2}`,bends:[[mx,ay],[mx,by]]};
+}
+// pace scales every timing together: 1.3 = 30% faster (steps, packets, pauses, ticker)
+// the presenter speed (MULT) multiplies the panel's own pace; ?speed=0.5 in the URL sets it at load
+const SPEEDS=[0.5,1,1.5,2], QS=+new URLSearchParams(location.search).get("speed");
+let BASE=SPEC.pace||1, MULT=SPEEDS.includes(QS)?QS:1, PACE=BASE*MULT, TICK=(SPEC.tick||1100)/PACE;
+const FLOWS=(SPEC.flows||[]).filter(f=>f.steps&&f.steps.length), AMBIENT=!FLOWS.length;
+const E=SPEC.edges.map(e=>{const r=route(e);const p=S("path",{d:r.d,class:`wire c-${e.c}${e.dashed?" dash":""}`});svg.appendChild(p);const len=p.getTotalLength();
+  const o={...e,d:r.d,p,len};
+  if(e.label){const m=p.getPointAtLength(len*(e.labelAt??.5));const l=el("div","elabel",esc(e.label));l.style.left=(m.x+(e.lx||0))+"px";l.style.top=(m.y+(e.ly||0))+"px";board.appendChild(l);o.l=l;}
+  if(AMBIENT)for(let i=0;i<2;i++){const k=S("circle",{r:3.2,class:`pkt c-${e.c}`,fill:"currentColor"});k.appendChild(S("animateMotion",{dur:(len/(e.speed||100)/PACE).toFixed(2)+"s",repeatCount:"indefinite",begin:(-i*len/(e.speed||100)/PACE/2).toFixed(2)+"s",path:r.d}));svg.appendChild(k);}
+  r.bends.forEach(([x,y])=>svg.appendChild(S("circle",{cx:x,cy:y,r:2.6,class:"jx"})));
+  return o;});
+
+// side trigger wires (dashed, lit when active)
+const TRG_DIM=.35, trgPaths=(sd.blocks||[]).filter(b=>b.trigger).map(({trigger:[,to]},i)=>{
+  const row=side.querySelector(`[data-trg="${i}"]`); const ry=sd.y+row.offsetTop+row.offsetHeight/2;
+  const b=box(to); const x1=sd.x+sd.w, x2=b.x, y2=b.y+b.h/2; const mx=x1+28;
+  const d=Math.abs(ry-y2)<2?`M${x1} ${ry} H${x2}`:`M${x1} ${ry} H${mx} V${y2} H${x2}`;
+  const p=S("path",{d,class:"wire lit",stroke:`var(--${sd.c})`,opacity:TRG_DIM});svg.appendChild(p);
+  const k=S("circle",{r:3.2,class:`pkt c-${sd.c}`,fill:"currentColor",opacity:0});
+  const m=S("animateMotion",{dur:(1.4/PACE).toFixed(2)+"s",begin:"indefinite",path:d,fill:"freeze"});k.appendChild(m);svg.appendChild(k);
+  return {row,p,k,m,to};
+});
+
+// ── ticker pieces: counters, gauges, log, triggers, status lines ──
+const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+const C=SPEC.counters||{}, cnt={}; for(const k in C)cnt[k]=C[k].start??(C[k].range?Math.round(rnd(...C[k].range)):C[k].choices?.[0]??0);
+const setC=(k,v)=>document.querySelectorAll(`[data-counter="${k}"]`).forEach(e=>{e.textContent=typeof v==="number"?v.toLocaleString():v;e.parentElement.classList.remove("pulse");void e.offsetWidth;e.parentElement.classList.add("pulse");});
+for(const k in C)setC(k,cnt[k]);
+const tickRange=()=>{for(const k in C)if(C[k].range){cnt[k]=Math.round(rnd(...C[k].range));setC(k,cnt[k]);}};
+const tickEvent=()=>{for(const k in C){if(C[k].inc){cnt[k]+=Math.round(rnd(...C[k].inc));setC(k,cnt[k]);}else if(C[k].choices){cnt[k]=pick(C[k].choices);setC(k,cnt[k]);}}};
+const gauges=[];for(const n of SPEC.nodes)if(n.gauges)n.gauges.forEach((g,i)=>gauges.push({n,i,v:g[1]}));
+const paintG=()=>gauges.forEach(g=>{$(`[data-g="${g.n.id}:${g.i}"]`).style.width=(g.v*100)+"%";$(`[data-gv="${g.n.id}:${g.i}"]`).textContent=g.v.toFixed(2)});
+paintG();
+const logEl=$("#log"); let clock=23*3600+48*60+3;
+const hms=s=>[s/3600|0,(s/60|0)%60,s%60].map(x=>String(x).padStart(2,"0")).join(":");
+function logLine([w,c,t]){clock+=1+Math.floor(rnd(0,3));
+  logEl.appendChild(el("div",null,`<span class="t">${hms(clock)}</span><span class="w c-${c}">${esc(w)}</span><span>${esc(t)}</span>`));
+  while(logEl.children.length>(SPEC.logLines||6))logEl.firstChild.remove();}
+// light side trigger i (null = none) and send its packet; firing a trigger is an event for the counters
+function fire(i){trgPaths.forEach((t,j)=>{t.row.classList.toggle("on",j===i);t.p.setAttribute("opacity",j===i?1:TRG_DIM);});
+  const t=trgPaths[i];if(t){t.k.setAttribute("opacity",1);t.m.beginElement();tickEvent();}}
+const ST={};for(const id in NEL)ST[id]=NEL[id].querySelector("[data-st]");
+const setSt=(id,kind,text)=>{const e=ST[id];if(!e)return;e.className=`st ${kind} c-${N[id].c}`;e.textContent=text||{run:"running",done:"done",wait:"waiting",idle:"idle"}[kind];};
+const fb=$("#flowbar"), errHtml=()=>ERR.length?`<span class="err">${ERR.length} spec error(s), see console</span>`:"";
+
+// ── flows: play one route at a time ──
+// A flow is {name, steps:[step…], log:[[who,colour,text]…], trigger?} (one log line per step). A step is:
+//   "B" or ["B","C"]  the packet moves on from the previous step's node(s) to B (an array = real parallel work);
+//   "A>B"             a message from A to B, whoever was active before (sequence diagrams: a reply is "B>A");
+//   "A>A"             a note on A's lifeline: it logs and glows, no packet.
+// Each move must follow an edge (either direction: a reply travels the request's wire backwards).
+// Steps are resolved to edges once, here; validation, staging and playback all read st.links.
+const ids=s=>Array.isArray(s)?s:[s];
+function link(a,b){let e=E.find(e=>e.from===a&&e.to===b);if(e)return {e,rev:false};e=E.find(e=>e.from===b&&e.to===a);return e?{e,rev:true}:null;}
+const used=new Set();
+FLOWS.forEach(f=>{let last=[];
+  f.norm=f.steps.map((s,i)=>{let src,dst;if(typeof s==="string"&&s.includes(">")){[src,dst]=s.split(">").map(x=>[x.trim()]);}else{src=last;dst=ids(s);}last=dst;
+    [...src,...dst].forEach(id=>{if(!N[id])err(`flow "${f.name}" step ${i+1}: unknown node "${id}"`)});
+    const links=src.flatMap(a=>dst.filter(b=>b!==a).map(b=>{const l=link(a,b);if(!l)err(`flow "${f.name}" step ${i+1}: no edge between ${a} and ${b}`);return l;})).filter(Boolean);
+    links.forEach(l=>used.add(l.e));return {src,dst,links};});
+  f.on=new Set(f.norm.flatMap(st=>[...st.src,...st.dst]));f.route=new Set(f.norm.flatMap(st=>st.links.map(l=>l.e)));
+  if(f.log&&f.log.length!==f.steps.length)err(`flow "${f.name}": ${f.log.length} log lines for ${f.steps.length} steps`);
+  // a flow with trigger:i fires side trigger i when it starts; the trigger's target must be on the flow
+  if(f.trigger!=null){const t=trgPaths[f.trigger]?.to;if(t==null)err(`flow "${f.name}": no side trigger ${f.trigger}`);else if(!f.on.has(t))err(`flow "${f.name}": side trigger "${t}" is not on the flow`);}});
+if(!AMBIENT){E.forEach(e=>{if(!used.has(e))err(`edge ${e.from}→${e.to} is in no flow`)});
+  trgPaths.forEach((t,i)=>{if(!FLOWS.some(f=>f.trigger===i))err(`side trigger ${i} (${t.to}) is fired by no flow`)});}
+function shoot({e,rev}){const dur=Math.max(.45,e.len/(e.speed||160))/PACE;const k=S("circle",{r:4,class:`pkt shot c-${e.c}`,fill:"currentColor"});
+  const m=S("animateMotion",Object.assign({dur:dur+"s",begin:"indefinite",fill:"freeze",path:e.d},rev?{keyPoints:"1;0",keyTimes:"0;1",calcMode:"linear"}:{}));
+  k.appendChild(m);svg.appendChild(k);m.beginElement();e.p.classList.add("hot");later(()=>{k.remove();e.p.classList.remove("hot")},dur*1000+350);return dur;}
+let fi=0,si=0,active=[],gen=0,pin=null;
+// every scheduled step carries the generation it was scheduled in; picking a tab bumps gen, so stale steps drop out
+// one pausable clock: `at` runs fn after ms of unpaused time; `later` also drops it if a tab was picked since
+let vt=0,lastT=performance.now(),paused=false;const Q=[];
+const at=(fn,ms)=>{Q.push({t:vt+ms,fn})};
+setInterval(()=>{const now=performance.now();if(!paused)vt+=now-lastT;lastT=now;
+  for(let i=0;i<Q.length;){if(Q[i].t<=vt)Q.splice(i,1)[0].fn();else i++;}},30);
+const later=(fn,ms)=>{const g=gen;at(()=>{if(g===gen)fn()},ms)};
+function stageFlow(f){active=[];
+  for(const id in NEL){NEL[id].classList.toggle("dim",!f.on.has(id));NEL[id].classList.remove("on");setSt(id,f.on.has(id)?"wait":"idle");}
+  E.forEach(e=>{const r=f.route.has(e);e.p.classList.toggle("route",r);e.p.classList.toggle("off",!r);e.l?.classList.toggle("dim",!r);});
+  fire(f.trigger??null);}
+function playStep(){
+  const f=FLOWS[fi],n=f.norm.length;if(si===0)stageFlow(f);
+  const st=f.norm[si],line=f.log?.[si],dur=Math.max(0,...st.links.map(shoot));
+  active.forEach(id=>{if(!st.dst.includes(id)){NEL[id].classList.remove("on");setSt(id,"done");}});active=st.dst;
+  fb.innerHTML=`▶ <b>${esc(f.name)}</b> · step ${si+1}/${n}`+(line?` · ${esc(line[2])}`:"")+(ERR.length?" · "+errHtml():"");
+  later(()=>{st.dst.forEach(id=>{NEL[id].classList.add("on");setSt(id,"run");});if(line)logLine(line);},dur*1000);
+  const wait=Math.max(TICK,dur*1000+500/PACE);si++;
+  if(si>=n){si=0;fi=pin??(fi+1)%FLOWS.length;later(()=>st.dst.forEach(id=>setSt(id,"done")),wait);later(playStep,wait+TICK*1.6);}else later(playStep,wait);
+}
+
+// flow tabs (2+ flows): "all" plays every flow in turn, a flow's tab replays that one flow on a loop
+const tabs=$("#flowtabs");
+if(FLOWS.length>1){tabs.innerHTML=`<button data-f="-1" class="on">all</button>`+FLOWS.map((f,i)=>`<button data-f="${i}">${esc(f.name)}</button>`).join("");
+  tabs.addEventListener("click",ev=>{const b=ev.target.closest("button");if(!b)return;const i=+b.dataset.f;
+    tabs.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    gen++;pin=i<0?null:i;if(pin!=null)fi=pin;si=0;
+    svg.querySelectorAll(".shot").forEach(k=>k.remove());E.forEach(e=>e.p.classList.remove("hot"));playStep();});}
+
+// ── main loop: flows drive themselves; one ticker drifts counters and gauges and, in ambient mode, also runs the log, statuses and triggers ──
+let step=0,trg=0,li=0;const L=SPEC.log||[],statuses=[["running","run"],["running","run"],["done","done"],["waiting","wait"]];
+if(AMBIENT){for(let i=0;i<Math.min(6,L.length);i++)logLine(L[li++]);fb.innerHTML=errHtml();if(trgPaths.length)fire(0);}
+else playStep();
+at(function beat(){at(beat,TICK);step++;
+  if(step%2===0)tickRange();
+  if(step%3===0){gauges.forEach(g=>{g.v=Math.min(.99,Math.max(.05,g.v+rnd(-.03,.03)))});paintG();}
+  if(!AMBIENT)return;
+  if(L.length)logLine(L[li++%L.length]);
+  if(step%4===0){const c=Object.values(N).filter(n=>n.status&&n.status.flip!==false);if(c.length){const [t,k]=pick(statuses);setSt(pick(c).id,k,t);}}
+  if(step%5===0){if(trgPaths.length)fire(trg=(trg+1)%trgPaths.length);else tickEvent();}
+},TICK);
+
+// presenter controls in the title bar: pause (space) and speed (- / +)
+const ctl=$("#ctl");
+ctl.innerHTML=`<button data-pause>❚❚ pause</button><em>speed</em>`+SPEEDS.map(s=>`<button data-s="${s}">${s}×</button>`).join("");
+function setSpeed(m){MULT=m;PACE=BASE*MULT;TICK=(SPEC.tick||1100)/PACE;ctl.querySelectorAll("[data-s]").forEach(b=>b.classList.toggle("on",+b.dataset.s===m));}
+function togglePause(){paused=!paused;paused?svg.pauseAnimations():svg.unpauseAnimations();$("#stage").classList.toggle("paused",paused);
+  ctl.querySelector("[data-pause]").textContent=paused?"▶ play":"❚❚ pause";}
+ctl.addEventListener("click",ev=>{const b=ev.target.closest("button");if(!b)return;if(b.hasAttribute("data-pause"))togglePause();else setSpeed(+b.dataset.s);b.blur();});
+addEventListener("keydown",ev=>{if(ev.ctrlKey||ev.metaKey||ev.altKey)return;const i=SPEEDS.indexOf(MULT);
+  if(ev.key===" "){ev.preventDefault();togglePause();}
+  else if(ev.key==="+"||ev.key==="=")setSpeed(SPEEDS[Math.min(SPEEDS.length-1,i+1)]);
+  else if(ev.key==="-"||ev.key==="_")setSpeed(SPEEDS[Math.max(0,i-1)]);});
+setSpeed(MULT);
+
+// scale the 1120px stage to the viewport width
+const stage=$("#stage"), vp=$(".viewport");
+function fit(){const s=Math.min(1,vp.clientWidth/1120);stage.style.transform=`scale(${s})`;vp.style.height=stage.offsetHeight*s+"px";}
+addEventListener("resize",fit);document.fonts?.ready.then(fit);fit();
+</script>
